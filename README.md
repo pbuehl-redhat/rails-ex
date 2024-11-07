@@ -16,6 +16,7 @@
     + [License](#license)
 
 <!-- tocstop -->
+testing the merge
 
 Rails Sample App on OpenShift
 ============================
