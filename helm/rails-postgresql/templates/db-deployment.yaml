@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgresql
+  annotations:
+    description: Defines how to deploy the database
+    image.openshift.io/triggers: '[{"from":{"kind":"ImageStreamTag","name":"postgresql:{{ .Values.istag.postgresql.version }}",
+      "namespace": "openshift"},"fieldPath": "spec.template.spec.containers[0].image"}]'
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      name: postgresql
+  template:
+    metadata:
+      name: postgresql
+      labels:
+        name: postgresql
+    spec:
+      {{- with .Values.database.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.serviceAccount.create -}}
+      serviceAccountName: {{ include "rails-postgresql.serviceAccountName" . }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      volumes:
+        - name: data
+          emptyDir: {}
+      containers:
+        - name: postgresql
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: " "
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.database.service.targetPort }}
+          readinessProbe:
+            timeoutSeconds: {{ .Values.database.readinessProbe.timeoutSeconds }}
+            initialDelaySeconds: {{ .Values.database.readinessProbe.initialDelaySeconds }}
+            exec:
+              command:
+                - /usr/libexec/check-container
+          livenessProbe:
+            timeoutSeconds: {{ .Values.database.livenessProbe.timeoutSeconds }}
+            initialDelaySeconds: {{ .Values.database.livenessProbe.initialDelaySeconds }}
+            exec:
+              command:
+                - /usr/libexec/check-container
+                - '--live'
+          env:
+            - name: POSTGRESQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql
+                  key: database-user
+            - name: POSTGRESQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql
+                  key: database-password
+            - name: POSTGRESQL_DATABASE
+              value: postgresql
+            - name: POSTGRESQL_MAX_CONNECTIONS
+              value: {{ .Values.database.maxConnections }}
+            - name: POSTGRESQL_SHARED_BUFFERS
+              value: {{ .Values.database.sharedBuffers }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

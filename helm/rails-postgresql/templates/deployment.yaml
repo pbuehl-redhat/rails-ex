@@ -1,0 +1,162 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "rails-postgresql.fullname" . }}
+  labels:
+    {{- include "rails-postgresql.labels" . | nindent 4 }}
+  {{- if .Values.buildconfig.enabled }}
+  annotations:
+    image.openshift.io/triggers: >
+      [
+        {
+          "from": {
+            "kind": "ImageStreamTag",
+            "name": "{{ include "rails-postgresql.fullname" . }}:latest"
+          },
+          "fieldPath": "spec.template.spec.containers[0].image"
+        },
+        {
+          "from": {
+            "kind": "ImageStreamTag",
+            "name": "{{ include "rails-postgresql.fullname" . }}:latest"
+          },
+          "fieldPath": "spec.template.spec.initContainers[0].image"
+        }
+      ]
+  {{- end }}
+spec:
+  strategy:
+    type: Recreate
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "rails-postgresql.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "rails-postgresql.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.serviceAccount.create -}}
+      serviceAccountName: {{ include "rails-postgresql.serviceAccountName" . }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: ruby-init-container
+          {{- if .Values.buildconfig.enabled }}
+          image: ' '
+          {{- else }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          {{- end }}
+          command:
+            - ./migrate-database.sh
+          env:
+            - name: DATABASE_SERVICE_NAME
+              value: postgresql
+            - name: POSTGRESQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql
+                  key: database-user
+            - name: POSTGRESQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql
+                  key: database-password
+            - name: POSTGRESQL_DATABASE
+              value: postgresql
+            - name: POSTGRESQL_MAX_CONNECTIONS
+              value: "{{ .Values.database.maxConnections }}"
+            - name: POSTGRESQL_SHARED_BUFFERS
+              value: "{{ .Values.database.sharedBuffers }}"
+            - name: APPLICATION_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql
+                  key: application-user
+            - name: APPLICATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql
+                  key: application-password
+            - name: RAILS_ENV
+              value: "{{ .Values.rails.env }}"
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- if .Values.buildconfig.enabled }}
+          image: ' '
+          {{- else }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          {{- end }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.targetPort }}
+          readinessProbe:
+            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            httpGet:
+              path: {{ .Values.readinessProbe.path }}
+              port: {{ .Values.readinessProbe.port }}
+          livenessProbe:
+            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            httpGet:
+              path: {{ .Values.livenessProbe.path }}
+              port: {{ .Values.livenessProbe.port }}
+          env:
+            - name: DATABASE_SERVICE_NAME
+              value: postgresql
+            - name: POSTGRESQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql
+                  key: database-user
+            - name: POSTGRESQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql
+                  key: database-password
+            - name: POSTGRESQL_DATABASE
+              value: postgresql
+            - name: POSTGRESQL_MAX_CONNECTIONS
+              value: "{{ .Values.database.maxConnections }}"
+            - name: POSTGRESQL_SHARED_BUFFERS
+              value: "{{ .Values.database.sharedBuffers }}"
+            - name: APPLICATION_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql
+                  key: application-user
+            - name: APPLICATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql
+                  key: application-password
+            - name: RAILS_ENV
+              value: "{{ .Values.rails.env }}"
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

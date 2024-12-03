@@ -1,0 +1,38 @@
+{{- if .Values.buildconfig.enabled -}}
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: {{ include "rails-postgresql.fullname" . }}
+  annotations:
+    description: "Defines how to build the application"
+spec:
+  source:
+    type: Git
+    git:
+      uri: {{ .Values.git.sourceRepoUrl }}
+      ref: {{ .Values.git.sourceRepoRef }}
+    contextDir: {{ .Values.git.contextDir }}
+  strategy:
+    type: Source
+    sourceStrategy:
+      from:
+        kind: ImageStreamTag
+        namespace: {{ .Values.istag.namespace }}
+        name: "ruby:{{ .Values.ruby.version }}"
+      env:
+        - name: RUBYGEM_MIRROR
+          value: {{ .Values.ruby.gemmirror }}
+  output:
+    to:
+      kind: ImageStreamTag
+      name: "{{ include "rails-postgresql.fullname" . }}:latest"
+  triggers:
+    - type: ImageChange
+    - type: ConfigChange
+    - type: GitHub
+      github:
+        secret: {{ .Values.git.githubWebSecret | default (randAlphaNum 40) | b64enc }}
+    - type: GitLab
+      gitlab:
+        secret: {{ .Values.git.gitlabWebSecret | default (randAlphaNum 40) | b64enc  }}
+{{- end }}

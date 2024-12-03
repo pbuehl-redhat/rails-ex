@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "rails-postgresql.fullname" . }}
+  annotations:
+    description: Exposes and load balances the application pods
+    service.alpha.openshift.io/dependencies: "[{'name': '{{ include "rails-postgresql.fullname" . }}', 'kind': 'Service'}]"
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.targetPort }}
+      name: {{ .Values.service.name }}
+  selector:
+    {{- include "rails-postgresql.selectorLabels" . | nindent 4 }}
