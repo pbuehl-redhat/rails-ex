@@ -24,13 +24,14 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       {{- if .Values.serviceAccount.create -}}
-      serviceAccountName: {{ include "rails-postgresql.serviceAccountName" . }}
+      serviceAccountName: {{ include "rails-postgresql-persistent.serviceAccountName" . }}
       {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       volumes:
-        - name: data
-          emptyDir: {}
+        - name: postgresql-data
+          persistentVolumeClaim:
+            claimName: postgresql
       containers:
         - name: postgresql
           securityContext:
@@ -53,7 +54,7 @@ spec:
                 - /usr/libexec/check-container
                 - '--live'
           volumeMounts:
-            - name: data
+            - name: postgresql-data
               mountPath: /var/lib/pgsql/data
           env:
             - name: POSTGRESQL_USER
